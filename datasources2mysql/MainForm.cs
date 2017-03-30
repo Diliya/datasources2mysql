@@ -29,6 +29,7 @@ namespace datasources2mysql
             //throw new NotImplementedException();
             if (p)
             {
+                lbStatusRep.Text = "请先选择一个数据源";
                 dateStart.Enabled = false;
                 dateStop.Enabled = false;
                 btnStartEx.Enabled = false;
@@ -191,7 +192,9 @@ namespace datasources2mysql
             }
             else
             {
+                lbStatusRep.Text = "正在导入......";
                 StartExchage();
+                
             }
             //MessageBox.Show(cmbSources.SelectedItem.ToString());
         }
@@ -266,6 +269,7 @@ namespace datasources2mysql
                 
             }
             MessageBox.Show("成功导入" + n + "个csv文件入数据库");
+            lbStatusRep.Text = "成功导入" + n + "个csv文件入数据库";
         }
 
         /// <summary>
