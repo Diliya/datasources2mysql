@@ -7,6 +7,8 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.IO;
+using System.Data.Common;
+using System.Configuration;
 
 namespace datasources2mysql
 {
@@ -200,38 +202,139 @@ namespace datasources2mysql
             DirectoryInfo dir = new DirectoryInfo(cmbContract.SelectedValue.ToString());
             
             DirectoryInfo[] dirsYear = dir.GetDirectories();
-
+            int n = 0;
             foreach (var i in dirsYear)
             {
                 DirectoryInfo dirYear = new DirectoryInfo(cmbContract.SelectedValue.ToString()+"\\"+i.ToString());
                 DirectoryInfo[] dirsMonth = dirYear.GetDirectories();
+                
                 foreach (var m in dirsMonth)
                 {
                     FileInfo[] filesContain = m.GetFiles();
-                    int n = 0;
+                    
                     foreach (FileInfo f in filesContain)
                     {
-                        if (n == 0)
+                        //int n = 0;
+                        string tableNmae = f.ToString().Substring(0, f.ToString().Length - 4);
+                        string csvPath = cmbContract.SelectedValue.ToString() + "\\" + i.ToString() + "\\" + m.ToString();
+                        FileStream fs = new FileStream(csvPath +"\\"+ f.ToString(), System.IO.FileMode.Open, System.IO.FileAccess.Read);
+                        StreamReader sr = new StreamReader(fs, Encoding.Default);
+                        //string fileContent = sr.ReadToEnd();
+                        //encoding = sr.CurrentEncoding;
+                        
+                        //记录每次读取的一行记录
+                        string strLine = "";
+                        //记录每行记录中的各字段内容
+                        string[] tableHead = null;
+                        if ((strLine = sr.ReadLine()) != null)
+                        {                            
+                                tableHead = strLine.Split(',');                 
+                        }
+                        string str= MysqlHelper.CsvToMysql(ConfigurationManager.ConnectionStrings["MySqlConnection"].ConnectionString,tableNmae,csvPath,tableHead);
+                        if (str == "retry")
                         {
-                            string file = @cmbContract.SelectedValue.ToString() + "\\" + i.ToString() + "\\" + m.ToString() + "\\" + f.ToString();
-                            FileStream fs = File.OpenRead(file);
-                            StreamReader sr = new StreamReader(fs, Encoding.Default);
-                            string line = sr.ReadLine();
                             n++;
+                            //MessageBox.Show(MysqlHelper.CsvToMysql(ConfigurationManager.ConnectionStrings["MySqlConnection"].ConnectionString, tableNmae, csvPath, tableHead));
                         }
-                        else if(n>0)
+                        else
                         {
-                            string file = @cmbContract.SelectedValue.ToString() + "\\" + i.ToString() + "\\" + m.ToString() + "\\" + f.ToString();
-                            FileStream fs = File.OpenRead(file);
-                            StreamReader sr = new StreamReader(fs, Encoding.Default);
-                            string line = sr.ReadLine();
+                            n++;//MessageBox.Show(str);
                         }
+                        
+                        //DataTable dtCSV = OpenCSV(f.ToString().Substring(0, f.ToString().Length - 4), cmbContract.SelectedValue.ToString() + "\\" + i.ToString() + "\\" + m.ToString() + "\\" + f.ToString());
+                        //MessageBox.Show(MysqlHelper.InsertByDataTable(ConfigurationManager.ConnectionStrings["MySqlConnection"].ConnectionString, dtCSV));
+                        //if (n == 0)
+                        //{
+                        //    string file = @cmbContract.SelectedValue.ToString() + "\\" + i.ToString() + "\\" + m.ToString() + "\\" + f.ToString();
+                        //    FileStream fs = File.OpenRead(file);
+                        //    StreamReader sr = new StreamReader(fs, Encoding.Default);
+                        //    string line = sr.ReadLine();
+                        //    n++;
+                        //}
+                        //else if(n>0)
+                        //{
+                        //    string file = @cmbContract.SelectedValue.ToString() + "\\" + i.ToString() + "\\" + m.ToString() + "\\" + f.ToString();
+                        //    FileStream fs = File.OpenRead(file);
+                        //    StreamReader sr = new StreamReader(fs, Encoding.Default);
+                        //    string line = sr.ReadLine();
+
+                        //}
 
                     }
+                    
                 }
+                
             }
+            MessageBox.Show("成功导入" + n + "个csv文件入数据库");
         }
 
+        /// <summary>
+        /// 将CSV文件的数据读取到DataTable中
+        /// </summary>
+        /// <param name="fileName">CSV文件路径</param>
+        /// <returns>返回读取了CSV数据的DataTable</returns>
+        public static DataTable OpenCSV(string tableName,string filePath)
+        {
+            //Encoding encoding = Common.GetType(filePath); //Encoding.ASCII;//
+            DataTable dt = new DataTable();
+            FileStream fs = new FileStream(filePath, System.IO.FileMode.Open, System.IO.FileAccess.Read);
+
+            //StreamReader sr = new StreamReader(fs, Encoding.UTF8);
+            StreamReader sr = new StreamReader(fs, Encoding.Default);
+            //string fileContent = sr.ReadToEnd();
+            //encoding = sr.CurrentEncoding;
+            //记录每次读取的一行记录
+            string strLine = "";
+            //记录每行记录中的各字段内容
+            string[] aryLine = null;
+            string[] tableHead = null;
+            //标示列数
+            int columnCount = 0;
+            //标示是否是读取的第一行
+            bool IsFirst = true;
+            //逐行读取CSV中的数据
+            while ((strLine = sr.ReadLine()) != null)
+            {
+                //strLine = Common.ConvertStringUTF8(strLine, encoding);
+                //strLine = Common.ConvertStringUTF8(strLine);
+
+                if (IsFirst == true)
+                {
+                    tableHead = strLine.Split(',');
+                    IsFirst = false;
+                    columnCount = tableHead.Length;
+                    //创建列
+                    for (int i = 0; i < columnCount; i++)
+                    {
+                        DataColumn dc = new DataColumn(tableHead[i]);
+                        dt.Columns.Add(dc);
+                    //    MysqlHelper.CreateByDataTable(ConfigurationManager.ConnectionStrings["MySqlConnection"].ConnectionString, 
+                    //        tableName,
+                    //        tableHead);
+                    }
+                }
+                else
+                {
+                    aryLine = strLine.Split(',');
+                    DataRow dr = dt.NewRow();
+                    for (int j = 0; j < columnCount; j++)
+                    {
+                        dr[j] = aryLine[j];
+                    }
+                    dt.Rows.Add(dr);
+                }
+            }
+            if (aryLine != null && aryLine.Length > 0)
+            {
+                dt.DefaultView.Sort = tableHead[0] + " " + "asc";//有问题
+            }
+
+            sr.Close();
+            fs.Close();
+            //dt.TableName = ConfigurationManager.TableName["MySqlTable"].TableName;
+            dt.TableName = tableName;
+            return dt;
+        }
         private bool isDataContain(DateTime dtStart, DateTime dtStop, object p)
         {
             //throw new NotImplementedException();
